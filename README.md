@@ -36,3 +36,17 @@ Minimal Next.js frontend for heads-up No-Limit Hold'em against the bot served by
 3. Open http://localhost:3000, sit down, and play — the server auto-deals the
    next hand once one finishes and stacks persist across hands for the
    connection's lifetime.
+
+## Tests
+
+```bash
+npm test         # vitest run (jsdom + React Testing Library)
+npm run test:watch
+```
+
+Covers the client-visible game logic: the `useGame` WebSocket reducer (every
+server message → state, new-hand banner clearing, error handling), the
+`ActionBar` legal-action gating and bet/raise sizing, and the `Table`
+redaction display (opponent cards hidden mid-hand as card backs, revealed only
+at showdown) plus the win/loss/fold result banner.
+
