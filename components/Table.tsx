@@ -11,7 +11,10 @@ interface TableProps {
 export function Table({ table, playerId, lastResult }: TableProps) {
   const you = table.players.find((p) => p.id === playerId);
   const opponent = table.players.find((p) => p.id !== playerId);
-  const reveal = new Map(lastResult?.reveal.map((r) => [r.playerId, r]) ?? []);
+  // Only trust a reveal once the hand is actually over — never surface an
+  // opponent's cards mid-hand even if a stale result lingers in state.
+  const showReveal = !table.handInProgress && lastResult !== null;
+  const reveal = new Map(showReveal ? lastResult.reveal.map((r) => [r.playerId, r]) : []);
 
   if (!you || !opponent) return null;
 
@@ -33,7 +36,7 @@ export function Table({ table, playerId, lastResult }: TableProps) {
             <PlayingCard key={c} card={c} />
           ))}
         </div>
-        {lastResult && <ResultBanner result={lastResult} playerId={playerId} />}
+        {showReveal && <ResultBanner result={lastResult} playerId={playerId} />}
       </div>
 
       <PlayerSeat
@@ -53,7 +56,7 @@ function ResultBanner({ result, playerId }: { result: WireHandResult; playerId: 
   const verb = yourNet > 0 ? "won" : yourNet < 0 ? "lost" : "pushed";
 
   return (
-    <div className="result-banner">
+    <div className="result-banner" role="status">
       <div className={`result-banner__headline result-banner__headline--${verb}`}>
         You {verb} {yourNet !== 0 ? Math.abs(yourNet) : ""}
         {result.wonWithoutShowdown ? " (opponent folded)" : ""}

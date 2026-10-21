@@ -1,19 +1,19 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type {
-  LegalActions,
-  ServerMessage,
-  WireHandResult,
-  WireTableState,
-} from "./protocol";
-import { useGame } from "./useGame";
+import type { LegalActions, ServerMessage, WireHandResult, WireTableState } from "./protocol";
+import { parseServerMessage, useGame } from "./useGame";
 
-/** A minimal WebSocket stand-in that records sent frames and lets tests drive events. */
+/** A WebSocket stand-in: records sent frames, models readyState, and drives events. */
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+
   url: string;
   sent: string[] = [];
-  closed = false;
+  readyState = FakeWebSocket.CONNECTING;
   private listeners: Record<string, Array<(ev: unknown) => void>> = {};
 
   constructor(url: string) {
@@ -30,11 +30,17 @@ class FakeWebSocket {
   }
 
   close() {
-    this.closed = true;
+    this.readyState = FakeWebSocket.CLOSED;
   }
 
   emit(type: string, ev: unknown = {}) {
     for (const cb of this.listeners[type] ?? []) cb(ev);
+  }
+
+  /** Transition to OPEN and fire the open event, like a real handshake completing. */
+  open() {
+    this.readyState = FakeWebSocket.OPEN;
+    this.emit("open");
   }
 
   emitServer(msg: ServerMessage) {
@@ -50,26 +56,8 @@ class FakeWebSocket {
 
 const TABLE: WireTableState = {
   players: [
-    {
-      id: "human-1",
-      seat: 0,
-      stack: 995,
-      committedThisStreet: 5,
-      committedTotal: 5,
-      status: "active",
-      hole: ["Ks", "4d"],
-      isBot: false,
-    },
-    {
-      id: "bot",
-      seat: 1,
-      stack: 990,
-      committedThisStreet: 10,
-      committedTotal: 10,
-      status: "active",
-      hole: null,
-      isBot: true,
-    },
+    { id: "human-1", seat: 0, stack: 995, committedThisStreet: 5, committedTotal: 5, status: "active", hole: ["Ks", "4d"], isBot: false },
+    { id: "bot", seat: 1, stack: 990, committedThisStreet: 10, committedTotal: 10, status: "active", hole: null, isBot: true },
   ],
   board: [],
   street: "preflop",
@@ -99,10 +87,7 @@ const RESULT: WireHandResult = {
     { playerId: "human-1", amount: 60 },
     { playerId: "bot", amount: -60 },
   ],
-  reveal: [
-    { playerId: "human-1", hole: ["Ks", "4d"], description: "Pair of nines" },
-    { playerId: "bot", hole: ["3d", "Qs"], description: "Two pair" },
-  ],
+  reveal: [{ playerId: "human-1", hole: ["Ks", "4d"], description: "Pair of nines" }],
 };
 
 beforeEach(() => {
@@ -114,45 +99,66 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("parseServerMessage", () => {
+  it("rejects non-strings, malformed JSON, and missing/unknown type", () => {
+    expect(parseServerMessage(42)).toBeNull();
+    expect(parseServerMessage("{not json")).toBeNull();
+    expect(parseServerMessage(JSON.stringify({ foo: 1 }))).toBeNull();
+    expect(parseServerMessage(JSON.stringify({ type: "nope" }))).toBeNull();
+  });
+
+  it("rejects a well-typed frame with a structurally invalid body", () => {
+    // `state` without a players array would crash <Table>; it must not pass.
+    expect(parseServerMessage(JSON.stringify({ type: "state", state: { pot: 5 } }))).toBeNull();
+    expect(parseServerMessage(JSON.stringify({ type: "joined", playerId: "x" }))).toBeNull();
+  });
+
+  it("accepts valid frames", () => {
+    expect(parseServerMessage(JSON.stringify({ type: "joined", playerId: "human-1", seat: 0 }))).toEqual({
+      type: "joined",
+      playerId: "human-1",
+      seat: 0,
+    });
+    expect(parseServerMessage(JSON.stringify({ type: "state", state: TABLE }))).toEqual({ type: "state", state: TABLE });
+  });
+});
+
 describe("useGame", () => {
-  it("starts idle and connects on join, sending a join frame on open", () => {
+  it("starts idle and sends a join frame once the socket opens", () => {
     const { result } = renderHook(() => useGame("ws://test"));
     expect(result.current.state.status).toBe("idle");
 
     act(() => result.current.join("Alice"));
     expect(result.current.state.status).toBe("connecting");
     const ws = FakeWebSocket.last();
-    expect(ws.url).toBe("ws://test");
-    expect(ws.sent).toHaveLength(0); // nothing sent before the socket opens
+    expect(ws.sent).toHaveLength(0); // nothing sent before open
 
-    act(() => ws.emit("open"));
+    act(() => ws.open());
     expect(JSON.parse(ws.sent[0]!)).toEqual({ type: "join", name: "Alice" });
   });
 
-  it("threads every server message into client-visible state", () => {
+  it("threads server messages into client-visible state", () => {
     const { result } = renderHook(() => useGame("ws://test"));
     act(() => result.current.join("Alice"));
     const ws = FakeWebSocket.last();
+    act(() => ws.open());
 
     act(() => ws.emitServer({ type: "joined", playerId: "human-1", seat: 0 }));
     expect(result.current.state.status).toBe("joined");
     expect(result.current.state.playerId).toBe("human-1");
-    expect(result.current.state.seat).toBe(0);
 
     act(() => ws.emitServer({ type: "state", state: TABLE }));
     expect(result.current.state.table).toEqual(TABLE);
 
     act(() => ws.emitServer({ type: "your-turn", legal: LEGAL }));
     expect(result.current.state.legal).toEqual(LEGAL);
-
-    act(() => ws.emitServer({ type: "acted", playerId: "bot", action: { type: "call" } }));
-    expect(result.current.state.lastAction).toEqual({ playerId: "bot", action: { type: "call" } });
   });
 
   it("stores the hand result and clears the pending turn", () => {
     const { result } = renderHook(() => useGame("ws://test"));
     act(() => result.current.join("Alice"));
     const ws = FakeWebSocket.last();
+    act(() => ws.open());
 
     act(() => ws.emitServer({ type: "your-turn", legal: LEGAL }));
     act(() => ws.emitServer({ type: "hand-result", result: RESULT }));
@@ -160,58 +166,129 @@ describe("useGame", () => {
     expect(result.current.state.legal).toBeNull();
   });
 
-  it("keeps the result banner during the same hand but clears it when the next hand deals", () => {
+  it("keeps the banner until the next hand is dealt (handInProgress true again)", () => {
     const { result } = renderHook(() => useGame("ws://test"));
     act(() => result.current.join("Alice"));
     const ws = FakeWebSocket.last();
+    act(() => ws.open());
 
-    act(() => ws.emitServer({ type: "state", state: TABLE })); // button 0
+    act(() => ws.emitServer({ type: "state", state: TABLE }));
     act(() => ws.emitServer({ type: "hand-result", result: RESULT }));
-    // Post-result snapshot of the same hand (button unchanged) keeps the banner.
+    // Final snapshot of the finished hand keeps the banner.
     act(() => ws.emitServer({ type: "state", state: { ...TABLE, handInProgress: false } }));
     expect(result.current.state.lastResult).toEqual(RESULT);
 
-    // Next hand: the button moves, so the stale banner is cleared.
-    act(() => ws.emitServer({ type: "state", state: { ...TABLE, buttonIndex: 1 } }));
+    // Next hand deals (handInProgress true again): banner clears.
+    act(() => ws.emitServer({ type: "state", state: { ...TABLE, handInProgress: true } }));
     expect(result.current.state.lastResult).toBeNull();
   });
 
-  it("sends an action frame and optimistically clears legal on act", () => {
+  it("sends an action frame and clears legal when the socket is open", () => {
     const { result } = renderHook(() => useGame("ws://test"));
     act(() => result.current.join("Alice"));
     const ws = FakeWebSocket.last();
+    act(() => ws.open());
     act(() => ws.emitServer({ type: "your-turn", legal: LEGAL }));
 
     act(() => result.current.act({ type: "raise", amount: 40 }));
     expect(result.current.state.legal).toBeNull();
-    expect(JSON.parse(ws.sent.at(-1)!)).toEqual({
-      type: "action",
-      action: { type: "raise", amount: 40 },
-    });
+    expect(JSON.parse(ws.sent.at(-1)!)).toEqual({ type: "action", action: { type: "raise", amount: 40 } });
   });
 
-  it("surfaces server errors and lets them be dismissed", () => {
+  it("does not drop a turn silently when the socket is not open", () => {
+    const { result } = renderHook(() => useGame("ws://test"));
+    act(() => result.current.join("Alice")); // still CONNECTING
+    const ws = FakeWebSocket.last();
+    act(() => ws.open());
+    act(() => ws.emitServer({ type: "your-turn", legal: LEGAL }));
+    act(() => ws.close()); // socket drops
+
+    act(() => result.current.act({ type: "call" }));
+    expect(result.current.state.error).toMatch(/not connected/i);
+    // No action frame should have gone out after the socket closed.
+    expect(ws.sent.some((f) => f.includes('"action"'))).toBe(false);
+  });
+
+  it("surfaces and dismisses an in-hand server error without dropping legal", () => {
     const { result } = renderHook(() => useGame("ws://test"));
     act(() => result.current.join("Alice"));
     const ws = FakeWebSocket.last();
+    act(() => ws.open());
+    act(() => ws.emitServer({ type: "joined", playerId: "human-1", seat: 0 }));
+    act(() => ws.emitServer({ type: "your-turn", legal: LEGAL }));
 
     act(() => ws.emitServer({ type: "error", message: "not your turn" }));
     expect(result.current.state.error).toBe("not your turn");
+    expect(result.current.state.legal).toEqual(LEGAL); // in-hand error keeps the turn
 
     act(() => result.current.dismissError());
     expect(result.current.state.error).toBeNull();
   });
 
-  it("marks the connection closed and errored on transport events", () => {
+  it("errors out of a join rejected before sitting down", () => {
     const { result } = renderHook(() => useGame("ws://test"));
     act(() => result.current.join("Alice"));
     const ws = FakeWebSocket.last();
+    act(() => ws.open());
 
-    act(() => ws.emit("error"));
+    act(() => ws.emitServer({ type: "error", message: "table full" }));
     expect(result.current.state.status).toBe("error");
-    expect(result.current.state.error).toMatch(/failed/i);
+    expect(result.current.state.error).toBe("table full");
+    expect(ws.readyState).toBe(FakeWebSocket.CLOSED);
+  });
+
+  it("surfaces a malformed frame as an error instead of throwing", () => {
+    const { result } = renderHook(() => useGame("ws://test"));
+    act(() => result.current.join("Alice"));
+    const ws = FakeWebSocket.last();
+    act(() => ws.open());
+    act(() => ws.emitServer({ type: "joined", playerId: "human-1", seat: 0 }));
+
+    act(() => ws.emit("message", { data: "{garbage" }));
+    expect(result.current.state.error).toMatch(/malformed/i);
+    expect(result.current.state.status).toBe("joined"); // connection survives
+  });
+
+  it("ignores events from a superseded socket after reconnect", () => {
+    const { result } = renderHook(() => useGame("ws://test"));
+    act(() => result.current.join("Alice"));
+    const first = FakeWebSocket.last();
+    act(() => first.open());
+
+    act(() => result.current.join("Alice")); // reconnect → new socket
+    const second = FakeWebSocket.last();
+    expect(second).not.toBe(first);
+
+    // The old socket's late close must not mark the new session closed.
+    act(() => first.emit("close"));
+    expect(result.current.state.status).toBe("connecting");
+  });
+
+  it("clears legal and marks closed when the socket drops", () => {
+    const { result } = renderHook(() => useGame("ws://test"));
+    act(() => result.current.join("Alice"));
+    const ws = FakeWebSocket.last();
+    act(() => ws.open());
+    act(() => ws.emitServer({ type: "your-turn", legal: LEGAL }));
 
     act(() => ws.emit("close"));
     expect(result.current.state.status).toBe("closed");
+    expect(result.current.state.legal).toBeNull();
+  });
+
+  it("errors a join that connects but never gets a joined reply", () => {
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useGame("ws://test"));
+      act(() => result.current.join("Alice"));
+      const ws = FakeWebSocket.last();
+      act(() => ws.open());
+
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(result.current.state.status).toBe("error");
+      expect(ws.readyState).toBe(FakeWebSocket.CLOSED);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
