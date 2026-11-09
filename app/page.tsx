@@ -13,9 +13,10 @@ export default function Home() {
   const [name, setName] = useState("Player");
 
   const isYourTurn = state.table?.actingPlayerId != null && state.table.actingPlayerId === state.playerId;
+  const inGame = Boolean(state.table && state.playerId);
 
   return (
-    <main className="page">
+    <main className={`page ${inGame ? "" : "page--entry"}`}>
       <h1 className="page__title">Poker Pro</h1>
 
       {state.error && (
@@ -50,7 +51,13 @@ export default function Home() {
             {state.status === "connecting" ? "Connecting..." : "Sit down"}
           </button>
         </form>
-      ) : state.status === "closed" ? (
+      ) : null}
+
+      {!inGame && state.status !== "closed" && (
+        <p className="entry-hint">Enter a name and take the seat to play a hand against the house bot.</p>
+      )}
+
+      {state.status === "closed" ? (
         <div className="banner" role="status">
           Disconnected from the game server.{" "}
           <button className="btn btn--primary" onClick={() => join(name.trim() || "Player")}>
@@ -63,7 +70,9 @@ export default function Home() {
         <Table table={state.table} playerId={state.playerId} lastResult={state.lastResult} />
       )}
 
-      {state.legal && isYourTurn && <ActionBar legal={state.legal} onAct={act} />}
+      {state.legal && isYourTurn && (
+        <ActionBar legal={state.legal} pot={state.table?.pot ?? 0} onAct={act} />
+      )}
     </main>
   );
 }

@@ -1,16 +1,60 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --felt: #0b5d3b;
-  --felt-dark: #073d27;
-  --accent: #d4af37;
-}
+/* =========================================================================
+   Poker Pro — "Private card room, after midnight"
+   A refined, tactile heads-up table: deep felt, walnut-leather rail, brass
+   accents, and a soft overhead spotlight. Dark by design — a card room is dark.
+   ========================================================================= */
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  /* Room */
+  --room-0: #0c0d10;          /* deepest corner */
+  --room-1: #15171c;          /* mid room */
+  --spotlight: rgba(255, 229, 168, 0.10);
+
+  /* Felt */
+  --felt: #157a4e;
+  --felt-dark: #0a4d30;
+  --felt-edge: #06361f;
+
+  /* Rail — walnut / leather */
+  --rail: #3a2416;
+  --rail-light: #5c3b24;
+  --rail-dark: #22140b;
+
+  /* Brass accent */
+  --accent: #d8b45a;
+  --accent-bright: #f0d488;
+  --accent-dim: #9c7f3c;
+
+  /* Text */
+  --foreground: #f2ede1;
+  --muted: #b3ab98;
+  --muted-dim: #7d7667;
+
+  /* Surfaces */
+  --surface: #1b1e24;
+  --surface-raised: #23272f;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  /* Card chip colors (action semantics) */
+  --chip-fold: #4a4f57;
+  --chip-check: #2f8f63;
+  --chip-call: #2f8f63;
+  --chip-raise: #c2501f;
+  --chip-allin: #7b3fb0;
+
+  /* Feedback */
+  --win: #58d08a;
+  --lose: #f5736f;
+
+  --background: var(--room-1);
+
+  --radius: 10px;
+  --radius-lg: 16px;
+  --shadow-card: 0 2px 5px rgba(0, 0, 0, 0.45), 0 0.5px 0 rgba(255, 255, 255, 0.7) inset;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  color-scheme: dark;
 }
 
 html {
@@ -28,10 +72,14 @@ body {
   display: flex;
   flex-direction: column;
   color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* The room: a dark field with a warm overhead spotlight pooled on the table. */
+  background:
+    radial-gradient(130% 90% at 50% -10%, var(--spotlight) 0%, transparent 45%),
+    radial-gradient(120% 120% at 50% 38%, var(--room-1) 0%, var(--room-0) 78%);
+  background-attachment: fixed;
 }
 
 * {
@@ -45,10 +93,13 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+/* Tabular numerals everywhere chip counts live. */
+.seat__stack,
+.seat__committed,
+.table__pot,
+.action-bar__amount,
+.result-banner {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- layout ------------------------------------------------------------ */
@@ -58,16 +109,50 @@ a {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5rem;
-  padding: 2rem 1rem 3rem;
-  max-width: 640px;
+  gap: 1.75rem;
+  padding: 2.25rem 1rem 3.5rem;
+  max-width: 760px;
   margin: 0 auto;
   width: 100%;
 }
 
+/* Pre-game: center the seat-in prompt in the room instead of leaving a void. */
+.page--entry {
+  justify-content: center;
+  gap: 1.25rem;
+}
+
+.entry-hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
 .page__title {
-  font-size: 1.75rem;
-  letter-spacing: 0.02em;
+  font-size: clamp(1.5rem, 4vw + 1rem, 2.1rem);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, var(--accent-bright), var(--accent-dim));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-align: center;
+  line-height: 1;
+}
+
+.page__title::after {
+  content: "9-Handed No-Limit Hold'em";
+  display: block;
+  margin-top: 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--muted-dim);
+  -webkit-text-fill-color: var(--muted-dim);
 }
 
 /* ---- join form ---------------------------------------------------------- */
@@ -75,29 +160,47 @@ a {
 .join-form {
   display: flex;
   gap: 0.5rem;
+  width: 100%;
+  max-width: 360px;
 }
 
 .join-form__input {
-  padding: 0.6rem 0.8rem;
-  border-radius: 6px;
-  border: 1px solid #888;
-  background: transparent;
+  flex: 1;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
   color: inherit;
   font-size: 1rem;
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+
+.join-form__input::placeholder {
+  color: var(--muted-dim);
+}
+
+.join-form__input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(216, 180, 90, 0.25);
 }
 
 /* ---- banners ------------------------------------------------------------ */
 
 .banner {
   width: 100%;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  background: #333;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
   text-align: center;
+  color: var(--muted);
 }
 
 .banner--error {
-  background: #7a1f1f;
+  background: linear-gradient(180deg, #3a1517, #2a0f11);
+  border-color: rgba(245, 115, 111, 0.4);
+  color: #ffd9d7;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -107,26 +210,21 @@ a {
 .banner__dismiss {
   background: transparent;
   border: none;
-  color: #fff;
+  color: inherit;
   font-size: 1.3rem;
   line-height: 1;
   cursor: pointer;
   padding: 0 0.25rem;
+  opacity: 0.8;
+  transition: opacity 0.15s var(--ease);
+}
+
+.banner__dismiss:hover {
+  opacity: 1;
 }
 
 /* Visually hidden but available to assistive tech. */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
+.sr-only,
 .join-form__label {
   position: absolute;
   width: 1px;
@@ -140,86 +238,217 @@ a {
 }
 
 /* ---- buttons -------------------------------------------------------------- */
+/* Action buttons read like casino chips: a bright face, a darker rolled edge. */
 
 .btn {
-  padding: 0.6rem 1rem;
-  border-radius: 6px;
+  position: relative;
+  padding: 0.6rem 1.15rem;
+  border-radius: var(--radius);
   border: none;
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 650;
+  letter-spacing: 0.02em;
   cursor: pointer;
   color: #fff;
-  transition: transform 0.05s ease;
+  background: var(--chip-call);
+  box-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.35),
+    0 4px 10px rgba(0, 0, 0, 0.3),
+    0 1px 0 rgba(255, 255, 255, 0.18) inset;
+  transition: transform 0.08s var(--ease), box-shadow 0.12s var(--ease), filter 0.12s var(--ease);
 }
 
 .btn:hover {
   transform: translateY(-1px);
+  filter: brightness(1.08);
 }
 
 .btn:active {
-  transform: translateY(0);
+  transform: translateY(1px);
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.35),
+    0 2px 5px rgba(0, 0, 0, 0.3),
+    0 1px 0 rgba(255, 255, 255, 0.12) inset;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(216, 180, 90, 0.45),
+    0 2px 0 rgba(0, 0, 0, 0.35),
+    0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
 }
 
 .btn--primary {
-  background: var(--accent);
-  color: #1a1a1a;
+  background: linear-gradient(180deg, var(--accent-bright), var(--accent-dim));
+  color: #2a2008;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 .btn--fold {
-  background: #555;
+  background: var(--chip-fold);
 }
-
-.btn--check {
-  background: #2d6a4f;
-}
-
+.btn--check,
 .btn--call {
-  background: #2d6a4f;
+  background: var(--chip-check);
 }
-
 .btn--raise {
-  background: #b5391a;
+  background: var(--chip-raise);
 }
-
 .btn--allin {
-  background: #7a1fa2;
+  background: var(--chip-allin);
 }
 
 /* ---- table --------------------------------------------------------------- */
 
+/* Positioning context for the oval and the seats placed around its rim. */
 .table {
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
+  position: relative;
+  padding-bottom: 58px; /* room for the hero seat overhanging the bottom rim */
 }
 
-.table__felt {
+/* The oval stage: opponents ring its edge, the board + pot sit at its center. */
+.felt {
+  position: relative;
   width: 100%;
-  min-height: 140px;
-  background: radial-gradient(ellipse at center, var(--felt) 0%, var(--felt-dark) 100%);
-  border: 6px solid #3a2417;
-  border-radius: 999px / 60px;
+  aspect-ratio: 10 / 6.6;
+  min-height: 340px;
+  background:
+    radial-gradient(60% 70% at 50% 42%, rgba(255, 255, 255, 0.1) 0%, transparent 60%),
+    radial-gradient(ellipse at center, var(--felt) 0%, var(--felt-dark) 72%, var(--felt-edge) 100%);
+  border-radius: 46% / 46%;
+  border: 10px solid var(--rail);
+  box-shadow:
+    0 0 0 2px var(--rail-dark),
+    0 0 0 12px var(--rail-light),
+    0 0 0 14px var(--rail-dark),
+    0 22px 45px rgba(0, 0, 0, 0.55),
+    0 0 60px rgba(0, 0, 0, 0.35) inset;
+}
+
+.felt::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: inherit;
+  border: 1.5px dashed rgba(216, 180, 90, 0.28);
+  pointer-events: none;
+}
+
+/* Board + pot, centered on the felt and not intercepting seat clicks. */
+.felt__center {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 1.5rem;
-  position: relative;
+  gap: 0.6rem;
+  pointer-events: none;
+  padding: 0 1rem;
+}
+
+/* A seat anchored at a point on (or just outside) the rim. */
+.felt__seat {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  z-index: 2;
+}
+
+.felt__seat--hero {
+  left: 50%;
+  top: 100%;
+  z-index: 3;
+}
+
+/* A bet laid out on the felt in front of a seat. */
+.felt__chip {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #2a2008;
+  padding: 0.08rem 0.5rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--accent-bright), var(--accent-dim));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+/* Compact seat for the opponent ring: smaller cards, tighter type, auto width.
+   `.seat.seat--compact` to outrank the later `.seat { width: 100% }` rule. */
+.seat.seat--compact {
+  width: auto;
+  min-width: 70px;
+  max-width: 108px;
+  flex: 0 1 auto;
+  gap: 0.3rem;
+  padding: 0.38rem 0.5rem;
+}
+.seat--compact .seat__cards {
+  min-height: 32px;
+  gap: 0.18rem;
+}
+.seat--compact .card {
+  width: 22px;
+  height: 32px;
+  border-radius: 3px;
+}
+.seat--compact .card__rank {
+  font-size: 0.64rem;
+}
+.seat--compact .card__suit {
+  font-size: 0.6rem;
+  margin-top: 0;
+}
+/* Name over stack keeps the plate narrow. */
+.seat--compact .seat__info {
+  flex-direction: column;
+  gap: 0.05rem;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+.seat--compact .seat__name {
+  font-size: 0.76rem;
+}
+.seat--compact .seat__button {
+  width: 0.95rem;
+  height: 0.95rem;
+  font-size: 0.55rem;
+  margin-left: 0.2rem;
+}
+.seat--compact .seat__description {
+  font-size: 0.68rem;
 }
 
 .table__pot {
-  color: #fff;
+  color: var(--foreground);
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  padding: 0.3rem 0.95rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(216, 180, 90, 0.35);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .table__board {
   display: flex;
-  gap: 0.4rem;
-  min-height: 64px;
+  gap: 0.45rem;
+  min-height: 72px;
+  align-items: center;
 }
 
 /* ---- seats ----------------------------------------------------------------- */
@@ -228,24 +457,35 @@ a {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.75rem 1rem;
-  border-radius: 10px;
+  gap: 0.55rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-lg);
   width: 100%;
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  border: 1px solid var(--border);
+  transition: box-shadow 0.25s var(--ease), border-color 0.25s var(--ease), opacity 0.25s var(--ease);
 }
 
 .seat--acting {
-  box-shadow: 0 0 0 2px var(--accent);
+  border-color: rgba(216, 180, 90, 0.55);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 22px rgba(216, 180, 90, 0.35);
+  animation: seat-pulse 2s var(--ease) infinite;
+}
+
+@keyframes seat-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px var(--accent), 0 0 18px rgba(216, 180, 90, 0.28); }
+  50%      { box-shadow: 0 0 0 1px var(--accent), 0 0 30px rgba(216, 180, 90, 0.5); }
 }
 
 .seat--folded {
-  opacity: 0.5;
+  opacity: 0.45;
+  filter: grayscale(0.4);
 }
 
 .seat__cards {
   display: flex;
-  gap: 0.3rem;
-  min-height: 64px;
+  gap: 0.35rem;
+  min-height: 72px;
 }
 
 .seat__info {
@@ -258,74 +498,116 @@ a {
 
 .seat__name {
   font-weight: 700;
+  letter-spacing: 0.03em;
+  display: inline-flex;
+  align-items: center;
 }
 
 .seat__button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.2rem;
-  height: 1.2rem;
-  margin-left: 0.3rem;
-  background: var(--accent);
-  color: #1a1a1a;
+  width: 1.3rem;
+  height: 1.3rem;
+  margin-left: 0.4rem;
+  background: linear-gradient(180deg, var(--accent-bright), var(--accent-dim));
+  color: #2a2008;
   border-radius: 999px;
   font-size: 0.7rem;
+  font-weight: 800;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.4) inset;
 }
 
 .seat__stack {
-  opacity: 0.85;
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .seat__committed {
-  color: var(--accent);
+  color: var(--accent-bright);
+  font-weight: 700;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(216, 180, 90, 0.12);
+  border: 1px solid rgba(216, 180, 90, 0.3);
 }
 
 .seat__status {
   font-style: italic;
-  opacity: 0.8;
+  color: var(--muted-dim);
 }
 
 .seat__description {
   font-size: 0.85rem;
-  opacity: 0.9;
+  color: var(--accent-bright);
+  width: 100%;
+  text-align: center;
 }
 
 /* ---- cards ------------------------------------------------------------------ */
+/* Classic stock: big rank top-left, suit mirrored, crisp white face. */
 
 .card {
-  width: 46px;
-  height: 64px;
-  border-radius: 6px;
-  background: #fdfdfd;
-  color: #111;
+  width: 50px;
+  height: 72px;
+  border-radius: 7px;
+  background: linear-gradient(160deg, #ffffff 0%, #eef0f3 100%);
+  color: #16181d;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-  line-height: 1.1;
+  font-weight: 800;
+  box-shadow: var(--shadow-card);
+  line-height: 1;
+  position: relative;
+  animation: card-deal 0.28s var(--ease) both;
+}
+
+@keyframes card-deal {
+  from { opacity: 0; transform: translateY(-8px) scale(0.92); }
+  to   { opacity: 1; transform: none; }
 }
 
 .card--red {
-  color: #c1272d;
+  color: #c62828;
 }
 
 .card--black {
-  color: #111;
+  color: #16181d;
 }
 
 .card__rank {
-  font-size: 1.1rem;
+  font-size: 1.3rem;
+  letter-spacing: -0.02em;
 }
 
 .card__suit {
-  font-size: 1.1rem;
+  font-size: 1.25rem;
+  margin-top: 0.05rem;
+}
+
+/* Corner pip echo, drawn from the same glyphs via the element's own content is
+   not possible without extra DOM; instead a subtle brand marker keeps the back
+   and face feeling like one deck. */
+.card::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  pointer-events: none;
 }
 
 .card--back {
-  background: repeating-linear-gradient(45deg, #1d4ed8, #1d4ed8 6px, #1e40af 6px, #1e40af 12px);
+  background:
+    radial-gradient(circle at center, rgba(240, 212, 136, 0.9) 0 4px, transparent 5px),
+    repeating-linear-gradient(45deg, #1f3a8a, #1f3a8a 6px, #1b327a 6px, #1b327a 12px);
+  border: 2px solid #16296a;
+}
+
+.card--back::after {
+  border-color: rgba(240, 212, 136, 0.45);
 }
 
 /* ---- action bar --------------------------------------------------------------- */
@@ -334,8 +616,13 @@ a {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.85rem;
   align-items: center;
+  padding: 1rem;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(35, 39, 47, 0.9), rgba(27, 30, 36, 0.9));
+  border: 1px solid var(--border);
+  box-shadow: 0 -2px 24px rgba(0, 0, 0, 0.3);
 }
 
 .action-bar__buttons {
@@ -345,44 +632,138 @@ a {
   justify-content: center;
 }
 
-.action-bar__raise {
+.action-bar__sizing {
   display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
   align-items: center;
-  gap: 0.5rem;
+  width: 100%;
+}
+
+/* Pot-fraction quick-size chips (Min / 33% / 50% / 75% / Pot). */
+.action-bar__presets {
+  display: flex;
+  gap: 0.4rem;
   flex-wrap: wrap;
   justify-content: center;
 }
 
+.btn--preset {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: none;
+}
+
+.btn--preset:hover {
+  filter: none;
+  color: var(--foreground);
+  border-color: var(--accent);
+}
+
+.btn--preset-on {
+  color: #2a2008;
+  background: linear-gradient(180deg, var(--accent-bright), var(--accent-dim));
+  border-color: transparent;
+}
+
+.action-bar__step {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.action-bar__step:hover {
+  border-color: var(--accent);
+}
+
+.action-bar__step:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-bar__raise {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* Brass-filled range track. */
 .action-bar__slider {
-  width: 160px;
+  width: 170px;
+  max-width: 55vw;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .action-bar__amount {
-  width: 80px;
-  padding: 0.4rem;
-  border-radius: 6px;
-  border: 1px solid #888;
-  background: transparent;
+  width: 84px;
+  padding: 0.45rem 0.5rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
   color: inherit;
+  text-align: center;
+  font-weight: 600;
+}
+
+.action-bar__amount:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(216, 180, 90, 0.25);
 }
 
 /* ---- result banner ------------------------------------------------------------- */
 
 .result-banner {
   position: absolute;
-  bottom: -1.5rem;
-  background: #111;
-  color: #fff;
-  padding: 0.4rem 1rem;
+  bottom: -1.1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, #1c1f26, #111318);
+  color: var(--foreground);
+  padding: 0.5rem 1.15rem;
   border-radius: 999px;
   font-weight: 700;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+  border: 1px solid rgba(216, 180, 90, 0.4);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  animation: result-pop 0.3s var(--ease) both;
+}
+
+@keyframes result-pop {
+  from { opacity: 0; transform: translate(-50%, 6px) scale(0.96); }
+  to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 
 .result-banner__headline--won {
-  color: #4ade80;
+  color: var(--win);
 }
 
 .result-banner__headline--lost {
-  color: #f87171;
+  color: var(--lose);
+}
+
+/* ---- motion preferences -------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

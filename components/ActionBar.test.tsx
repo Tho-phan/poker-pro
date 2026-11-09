@@ -40,7 +40,7 @@ const SHORT_STACK: LegalActions = {
 
 describe("ActionBar", () => {
   it("only renders the actions the server marks legal", () => {
-    render(<ActionBar legal={CHECK_OR_BET} onAct={vi.fn()} />);
+    render(<ActionBar legal={CHECK_OR_BET} pot={100} onAct={vi.fn()} />);
     expect(screen.getByRole("button", { name: /fold/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /check/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^call/i })).not.toBeInTheDocument();
@@ -49,7 +49,7 @@ describe("ActionBar", () => {
   it("emits fold with no amount", async () => {
     const onAct = vi.fn<(a: PlayerAction) => void>();
     const user = userEvent.setup();
-    render(<ActionBar legal={CALL_OR_RAISE} onAct={onAct} />);
+    render(<ActionBar legal={CALL_OR_RAISE} pot={100} onAct={onAct} />);
     await user.click(screen.getByRole("button", { name: /fold/i }));
     expect(onAct).toHaveBeenCalledWith({ type: "fold" });
   });
@@ -57,7 +57,7 @@ describe("ActionBar", () => {
   it("emits call with no amount", async () => {
     const onAct = vi.fn<(a: PlayerAction) => void>();
     const user = userEvent.setup();
-    render(<ActionBar legal={CALL_OR_RAISE} onAct={onAct} />);
+    render(<ActionBar legal={CALL_OR_RAISE} pot={100} onAct={onAct} />);
     await user.click(screen.getByRole("button", { name: /call 5/i }));
     expect(onAct).toHaveBeenCalledWith({ type: "call" });
   });
@@ -65,7 +65,7 @@ describe("ActionBar", () => {
   it("defaults the sizing input to the min raise and raises to it", async () => {
     const onAct = vi.fn<(a: PlayerAction) => void>();
     const user = userEvent.setup();
-    render(<ActionBar legal={CALL_OR_RAISE} onAct={onAct} />);
+    render(<ActionBar legal={CALL_OR_RAISE} pot={100} onAct={onAct} />);
     await user.click(screen.getByRole("button", { name: /raise to 20/i }));
     expect(onAct).toHaveBeenCalledWith({ type: "raise", amount: 20 });
   });
@@ -73,15 +73,35 @@ describe("ActionBar", () => {
   it("uses bet (not raise) when only betting is legal", async () => {
     const onAct = vi.fn<(a: PlayerAction) => void>();
     const user = userEvent.setup();
-    render(<ActionBar legal={CHECK_OR_BET} onAct={onAct} />);
+    render(<ActionBar legal={CHECK_OR_BET} pot={100} onAct={onAct} />);
     await user.click(screen.getByRole("button", { name: /^bet 10/i }));
     expect(onAct).toHaveBeenCalledWith({ type: "bet", amount: 10 });
+  });
+
+  it("sizes to a fraction of the pot from the presets", async () => {
+    const onAct = vi.fn<(a: PlayerAction) => void>();
+    const user = userEvent.setup();
+    render(<ActionBar legal={CHECK_OR_BET} pot={200} onAct={onAct} />);
+
+    await user.click(screen.getByRole("button", { name: "50%" }));
+    await user.click(screen.getByRole("button", { name: /^bet 100/i }));
+    expect(onAct).toHaveBeenCalledWith({ type: "bet", amount: 100 });
+  });
+
+  it("sizes to the full pot from the Pot preset", async () => {
+    const onAct = vi.fn<(a: PlayerAction) => void>();
+    const user = userEvent.setup();
+    render(<ActionBar legal={CHECK_OR_BET} pot={200} onAct={onAct} />);
+
+    await user.click(screen.getByRole("button", { name: "Pot" }));
+    await user.click(screen.getByRole("button", { name: /^bet 200/i }));
+    expect(onAct).toHaveBeenCalledWith({ type: "bet", amount: 200 });
   });
 
   it("shoves the whole stack with all-in", async () => {
     const onAct = vi.fn<(a: PlayerAction) => void>();
     const user = userEvent.setup();
-    render(<ActionBar legal={CALL_OR_RAISE} onAct={onAct} />);
+    render(<ActionBar legal={CALL_OR_RAISE} pot={100} onAct={onAct} />);
     await user.click(screen.getByRole("button", { name: /all-in/i }));
     expect(onAct).toHaveBeenCalledWith({ type: "all-in" });
   });
@@ -89,7 +109,7 @@ describe("ActionBar", () => {
   it("clamps a typed amount to the legal max", async () => {
     const onAct = vi.fn<(a: PlayerAction) => void>();
     const user = userEvent.setup();
-    render(<ActionBar legal={CALL_OR_RAISE} onAct={onAct} />);
+    render(<ActionBar legal={CALL_OR_RAISE} pot={100} onAct={onAct} />);
     fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "999999" } });
     await user.click(screen.getByRole("button", { name: /raise to/i }));
     expect(onAct).toHaveBeenCalledWith({ type: "raise", amount: 995 });
@@ -98,7 +118,7 @@ describe("ActionBar", () => {
   it("rounds a fractional amount to whole chips", async () => {
     const onAct = vi.fn<(a: PlayerAction) => void>();
     const user = userEvent.setup();
-    render(<ActionBar legal={CHECK_OR_BET} onAct={onAct} />);
+    render(<ActionBar legal={CHECK_OR_BET} pot={100} onAct={onAct} />);
     fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "12.4" } });
     await user.click(screen.getByRole("button", { name: /^bet/i }));
     expect(onAct).toHaveBeenCalledWith({ type: "bet", amount: 12 });
@@ -107,7 +127,7 @@ describe("ActionBar", () => {
   it("offers only all-in when the stack is too short for a legal sized raise", async () => {
     const onAct = vi.fn<(a: PlayerAction) => void>();
     const user = userEvent.setup();
-    render(<ActionBar legal={SHORT_STACK} onAct={onAct} />);
+    render(<ActionBar legal={SHORT_STACK} pot={100} onAct={onAct} />);
 
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /raise to/i })).not.toBeInTheDocument();
@@ -117,7 +137,7 @@ describe("ActionBar", () => {
 
   it("does not fire two actions on a fast double-click", () => {
     const onAct = vi.fn<(a: PlayerAction) => void>();
-    render(<ActionBar legal={CALL_OR_RAISE} onAct={onAct} />);
+    render(<ActionBar legal={CALL_OR_RAISE} pot={100} onAct={onAct} />);
     const call = screen.getByRole("button", { name: /call 5/i });
     fireEvent.click(call);
     fireEvent.click(call);
@@ -125,15 +145,15 @@ describe("ActionBar", () => {
   });
 
   it("gives the sizing controls accessible names", () => {
-    render(<ActionBar legal={CALL_OR_RAISE} onAct={vi.fn()} />);
+    render(<ActionBar legal={CALL_OR_RAISE} pot={100} onAct={vi.fn()} />);
     expect(screen.getByLabelText("Bet size")).toBeInTheDocument();
     expect(screen.getByLabelText("Bet size in chips")).toBeInTheDocument();
   });
 
   it("resets the sizing input when a new turn (new legal) arrives", () => {
-    const { rerender } = render(<ActionBar legal={CALL_OR_RAISE} onAct={vi.fn()} />);
+    const { rerender } = render(<ActionBar legal={CALL_OR_RAISE} pot={100} onAct={vi.fn()} />);
     expect(screen.getByRole("spinbutton")).toHaveValue(20);
-    rerender(<ActionBar legal={{ ...CHECK_OR_BET }} onAct={vi.fn()} />);
+    rerender(<ActionBar legal={{ ...CHECK_OR_BET }} pot={100} onAct={vi.fn()} />);
     expect(screen.getByRole("spinbutton")).toHaveValue(10);
   });
 });

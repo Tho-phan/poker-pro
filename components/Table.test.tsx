@@ -49,7 +49,7 @@ describe("Table", () => {
     expect(within(you).getByText("4")).toBeInTheDocument();
     expect(you.querySelectorAll(".card--back")).toHaveLength(0);
 
-    const bot = seatOf("Bot");
+    const bot = seatOf("Bot 1");
     expect(bot.querySelectorAll(".card--back")).toHaveLength(2);
     expect(bot.querySelector(".card__rank")).toBeNull();
   });
@@ -57,7 +57,7 @@ describe("Table", () => {
   it("never reveals the opponent mid-hand even if a stale result is present", () => {
     // handInProgress is still true: a lingering lastResult must not leak cards.
     render(<Table table={BASE} playerId="human-1" lastResult={SHOWDOWN} />);
-    const bot = seatOf("Bot");
+    const bot = seatOf("Bot 1");
     expect(bot.querySelectorAll(".card--back")).toHaveLength(2);
     expect(within(bot).queryByText("3")).not.toBeInTheDocument();
     expect(screen.queryByText("Two pair")).not.toBeInTheDocument();
@@ -71,7 +71,7 @@ describe("Table", () => {
 
   it("reveals the opponent's cards and hand description once the hand is over", () => {
     render(<Table table={OVER} playerId="human-1" lastResult={SHOWDOWN} />);
-    const bot = seatOf("Bot");
+    const bot = seatOf("Bot 1");
     expect(bot.querySelectorAll(".card--back")).toHaveLength(0);
     expect(within(bot).getByText("3")).toBeInTheDocument();
     expect(within(bot).getByText("Two pair")).toBeInTheDocument();
@@ -106,6 +106,6 @@ describe("Table", () => {
       reveal: [],
     };
     render(<Table table={OVER} playerId="human-1" lastResult={folded} />);
-    expect(screen.getByText(/opponent folded/i)).toBeInTheDocument();
+    expect(screen.getByText(/uncontested/i)).toBeInTheDocument();
   });
 });

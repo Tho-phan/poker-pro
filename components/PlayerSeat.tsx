@@ -8,6 +8,8 @@ interface PlayerSeatProps {
   isButton: boolean;
   revealedHole: Card[] | null;
   revealedDescription: string | null;
+  /** Render the smaller seat used for the ring of opponents. */
+  compact?: boolean;
 }
 
 export function PlayerSeat({
@@ -17,11 +19,16 @@ export function PlayerSeat({
   isButton,
   revealedHole,
   revealedDescription,
+  compact = false,
 }: PlayerSeatProps) {
   const hole = player.hole ?? revealedHole;
 
   return (
-    <div className={`seat ${isActing ? "seat--acting" : ""} ${player.status === "folded" ? "seat--folded" : ""}`}>
+    <div
+      className={`seat ${compact ? "seat--compact" : ""} ${isActing ? "seat--acting" : ""} ${
+        player.status === "folded" ? "seat--folded" : ""
+      }`}
+    >
       <div className="seat__cards">
         {hole
           ? hole.map((c) => <PlayingCard key={c} card={c} />)
@@ -33,9 +40,6 @@ export function PlayerSeat({
           {isButton && <span className="seat__button">D</span>}
         </div>
         <div className="seat__stack">{player.stack} chips</div>
-        {player.committedThisStreet > 0 && (
-          <div className="seat__committed">bet {player.committedThisStreet}</div>
-        )}
         <div className="seat__status">{describeStatus(player.status)}</div>
         {revealedDescription && <div className="seat__description">{revealedDescription}</div>}
       </div>
